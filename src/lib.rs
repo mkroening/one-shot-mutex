@@ -68,10 +68,12 @@ unsafe impl RawMutex for RawOneShotMutex {
 }
 
 unsafe impl RawMutexFair for RawOneShotMutex {
+    #[inline]
     unsafe fn unlock_fair(&self) {
         unsafe { self.unlock() }
     }
 
+    #[inline]
     unsafe fn bump(&self) {}
 }
 
