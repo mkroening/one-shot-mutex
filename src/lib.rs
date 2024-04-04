@@ -46,7 +46,10 @@ unsafe impl RawMutex for RawOneShotMutex {
 
     #[inline]
     fn lock(&self) {
-        assert!(self.try_lock(), "OneShotMutex is already locked.");
+        assert!(
+            self.try_lock(),
+            "called `lock` on a `RawOneShotMutex` that is already locked"
+        );
     }
 
     #[inline]
