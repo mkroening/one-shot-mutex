@@ -7,7 +7,7 @@ use lock_api::{
 
 /// A one-shot readers-writer lock that panics instead of (dead)locking on contention.
 ///
-/// This lock allows no contention and panics on [`lock_shared`], [`lock_exclusive`], [`lock_upgradable`], [`upgrade`] if it is already locked in a conflicting way.
+/// This lock allows no contention and panics on [`lock_shared`], [`lock_exclusive`], [`lock_upgradable`], and [`upgrade`] if it is already locked conflictingly.
 /// This is useful in situations where contention would be a bug,
 /// such as in single-threaded programs that would deadlock on contention.
 ///
