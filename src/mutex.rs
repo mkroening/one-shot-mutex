@@ -4,9 +4,11 @@ use lock_api::{GuardSend, RawMutex, RawMutexFair};
 
 /// A one-shot mutex that panics instead of (dead)locking on contention.
 ///
-/// This mutex allows no contention and panics on [`lock`] if it is already locked.
+/// This mutex allows no contention and panics instead of blocking on [`lock`] if it is already locked.
 /// This is useful in situations where contention would be a bug,
 /// such as in single-threaded programs that would deadlock on contention.
+///
+/// This mutex should be used through [`OneShotMutex`].
 ///
 /// [`lock`]: Self::lock
 ///
@@ -17,6 +19,7 @@ use lock_api::{GuardSend, RawMutex, RawMutexFair};
 ///
 /// static X: OneShotMutex<i32> = OneShotMutex::new(42);
 ///
+/// // This is equivalent to `X.try_lock().unwrap()`.
 /// let x = X.lock();
 ///
 /// // This panics instead of deadlocking.

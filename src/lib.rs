@@ -1,8 +1,10 @@
 //! One-shot locks that panic instead of (dead)locking on contention.
 //!
-//! These locks allow no contention and panic on `lock` if they are already locked.
+//! These locks allow no contention and panic instead of blocking on `lock` if they are already locked.
 //! This is useful in situations where contention would be a bug,
 //! such as in single-threaded programs that would deadlock on contention.
+//!
+//! See the [`RawOneShotMutex`] type for more information.
 
 #![no_std]
 
