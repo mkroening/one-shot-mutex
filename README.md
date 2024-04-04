@@ -4,7 +4,10 @@
 [![docs.rs](https://img.shields.io/docsrs/one-shot-mutex)](https://docs.rs/one-shot-mutex)
 [![CI](https://github.com/mkroening/one-shot-mutex/actions/workflows/ci.yml/badge.svg)](https://github.com/mkroening/one-shot-mutex/actions/workflows/ci.yml)
 
-A one-shot mutex that panics instead of (dead)locking on contention.
+One-shot locks that panic instead of (dead)locking on contention.
+
+These locks allow no contention and panic instead of blocking on `lock` if they are already locked.
+This is useful in situations where contention would be a bug, such as in single-threaded programs that would deadlock on contention.
 
 ```rust
 use one_shot_mutex::OneShotMutex;
