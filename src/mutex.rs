@@ -33,6 +33,18 @@ pub struct RawOneShotMutex {
     lock: AtomicBool,
 }
 
+impl RawOneShotMutex {
+    pub const fn new() -> Self {
+        Self::INIT
+    }
+}
+
+impl Default for RawOneShotMutex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 unsafe impl RawMutex for RawOneShotMutex {
     #[allow(clippy::declare_interior_mutable_const)]
     const INIT: Self = Self {

@@ -45,6 +45,10 @@ const UPGRADABLE: usize = 1 << 1;
 const EXCLUSIVE: usize = 1;
 
 impl RawOneShotRwLock {
+    pub const fn new() -> Self {
+        Self::INIT
+    }
+
     #[inline]
     fn is_locked_shared(&self) -> bool {
         self.lock.load(Ordering::Relaxed) & !(EXCLUSIVE | UPGRADABLE) != 0
@@ -67,6 +71,12 @@ impl RawOneShotRwLock {
         }
 
         value
+    }
+}
+
+impl Default for RawOneShotRwLock {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
