@@ -4,16 +4,9 @@
 //! This is useful in situations where contention would be a bug,
 //! such as in single-threaded programs that would deadlock on contention.
 //!
-//! See the [`RawOneShotMutex`] and [`RawOneShotRwLock`] types for more information.
+//! See the [`sync::RawOneShotMutex`] and [`sync::RawOneShotRwLock`] types for more information.
 
 #![no_std]
 
-mod mutex;
-mod rwlock;
+pub mod sync;
 pub mod unsync;
-
-pub use mutex::{OneShotMutex, OneShotMutexGuard, RawOneShotMutex};
-pub use rwlock::{
-    OneShotRwLock, OneShotRwLockReadGuard, OneShotRwLockUpgradableReadGuard,
-    OneShotRwLockWriteGuard, RawOneShotRwLock,
-};

@@ -19,7 +19,7 @@ use lock_api::{
 /// # Examples
 ///
 /// ```
-/// use one_shot_mutex::OneShotRwLock;
+/// use one_shot_mutex::sync::OneShotRwLock;
 ///
 /// static X: OneShotRwLock<i32> = OneShotRwLock::new(42);
 ///

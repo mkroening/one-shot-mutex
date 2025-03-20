@@ -12,7 +12,7 @@ use lock_api::{
 /// such as in single-threaded programs that would deadlock on contention.
 ///
 /// This lock does not implement `Sync`, which permits a slightly more efficient implementation.
-/// For a variant that does implement `Sync`, see [`RawOneShotRwLock`](crate::RawOneShotRwLock).
+/// For a variant that does implement `Sync`, see [`sync::RawOneShotRwLock`](crate::sync::RawOneShotRwLock).
 ///
 /// [`lock_shared`]: RawOneShotRwLock::lock_shared
 /// [`lock_exclusive`]: RawOneShotRwLock::lock_exclusive

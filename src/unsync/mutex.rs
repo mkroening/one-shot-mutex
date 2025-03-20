@@ -9,7 +9,7 @@ use lock_api::{GuardSend, RawMutex, RawMutexFair};
 /// such as in single-threaded programs that would deadlock on contention.
 ///
 /// This mutex does not implement `Sync`, which permits a slightly more efficient implementation.
-/// For a variant that does implement `Sync`, see [`RawOneShotMutex`](crate::RawOneShotMutex).
+/// For a variant that does implement `Sync`, see [`sync::RawOneShotMutex`](crate::sync::RawOneShotMutex).
 ///
 /// This mutex should be used through [`OneShotMutex`].
 ///
