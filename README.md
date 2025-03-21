@@ -10,7 +10,7 @@ These locks allow no contention and panic instead of blocking on `lock` if they 
 This is useful in situations where contention would be a bug, such as in single-threaded programs that would deadlock on contention.
 
 ```rust
-use one_shot_mutex::OneShotMutex;
+use one_shot_mutex::sync::OneShotMutex;
 
 static X: OneShotMutex<i32> = OneShotMutex::new(42);
 
