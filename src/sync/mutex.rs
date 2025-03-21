@@ -15,7 +15,7 @@ use lock_api::{GuardSend, RawMutex, RawMutexFair};
 /// # Examples
 ///
 /// ```
-/// use one_shot_mutex::OneShotMutex;
+/// use one_shot_mutex::sync::OneShotMutex;
 ///
 /// static X: OneShotMutex<i32> = OneShotMutex::new(42);
 ///

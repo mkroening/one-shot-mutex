@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::cell::Cell;
 
 use lock_api::{
     GuardSend, RawRwLock, RawRwLockDowngrade, RawRwLockRecursive, RawRwLockUpgrade,
@@ -11,6 +11,9 @@ use lock_api::{
 /// This is useful in situations where contention would be a bug,
 /// such as in single-threaded programs that would deadlock on contention.
 ///
+/// This lock does not implement `Sync`, which permits a slightly more efficient implementation.
+/// For a variant that does implement `Sync`, see [`sync::RawOneShotRwLock`](crate::sync::RawOneShotRwLock).
+///
 /// [`lock_shared`]: RawOneShotRwLock::lock_shared
 /// [`lock_exclusive`]: RawOneShotRwLock::lock_exclusive
 /// [`lock_upgradable`]: RawOneShotRwLock::lock_upgradable
@@ -19,22 +22,22 @@ use lock_api::{
 /// # Examples
 ///
 /// ```
-/// use one_shot_mutex::OneShotRwLock;
+/// use one_shot_mutex::unsync::OneShotRwLock;
 ///
-/// static X: OneShotRwLock<i32> = OneShotRwLock::new(42);
+/// let m: OneShotRwLock<i32> = OneShotRwLock::new(42);
 ///
 /// // This is equivalent to `X.try_write().unwrap()`.
-/// let x = X.write();
+/// let x = m.write();
 ///
 /// // This panics instead of deadlocking.
-/// // let x2 = X.write();
+/// // let x2 = m.write();
 ///
 /// // Once we unlock the mutex, we can lock it again.
 /// drop(x);
-/// let x = X.write();
+/// let x = m.write();
 /// ```
 pub struct RawOneShotRwLock {
-    lock: AtomicUsize,
+    lock: Cell<usize>,
 }
 
 /// Normal shared lock counter
@@ -50,23 +53,30 @@ impl RawOneShotRwLock {
     }
 
     #[inline]
+    fn over_state(&self, f: impl FnOnce(usize) -> usize) -> usize {
+        let old = self.lock.get();
+        self.lock.set(f(old));
+        old
+    }
+
+    #[inline]
     fn is_locked_shared(&self) -> bool {
-        self.lock.load(Ordering::Relaxed) & !(EXCLUSIVE | UPGRADABLE) != 0
+        self.lock.get() & !(EXCLUSIVE | UPGRADABLE) != 0
     }
 
     #[inline]
     fn is_locked_upgradable(&self) -> bool {
-        self.lock.load(Ordering::Relaxed) & UPGRADABLE == UPGRADABLE
+        self.lock.get() & UPGRADABLE == UPGRADABLE
     }
 
     /// Acquire a shared lock, returning the new lock value.
     #[inline]
     fn acquire_shared(&self) -> usize {
-        let value = self.lock.fetch_add(SHARED, Ordering::Acquire);
+        let value = self.over_state(|state| state + SHARED);
 
         // An arbitrary cap that allows us to catch overflows long before they happen
         if value > usize::MAX / 2 {
-            self.lock.fetch_sub(SHARED, Ordering::Relaxed);
+            self.over_state(|state| state - SHARED);
             panic!("Too many shared locks, cannot safely proceed");
         }
 
@@ -82,9 +92,7 @@ impl Default for RawOneShotRwLock {
 
 unsafe impl RawRwLock for RawOneShotRwLock {
     #[allow(clippy::declare_interior_mutable_const)]
-    const INIT: Self = Self {
-        lock: AtomicUsize::new(0),
-    };
+    const INIT: Self = Self { lock: Cell::new(0) };
 
     type GuardMarker = GuardSend;
 
@@ -115,7 +123,7 @@ unsafe impl RawRwLock for RawOneShotRwLock {
     unsafe fn unlock_shared(&self) {
         debug_assert!(self.is_locked_shared());
 
-        self.lock.fetch_sub(SHARED, Ordering::Release);
+        self.over_state(|state| state - SHARED);
     }
 
     #[inline]
@@ -128,26 +136,28 @@ unsafe impl RawRwLock for RawOneShotRwLock {
 
     #[inline]
     fn try_lock_exclusive(&self) -> bool {
-        self.lock
-            .compare_exchange(0, EXCLUSIVE, Ordering::Acquire, Ordering::Relaxed)
-            .is_ok()
+        let ok = self.lock.get() == 0;
+        if ok {
+            self.lock.set(EXCLUSIVE);
+        }
+        ok
     }
 
     #[inline]
     unsafe fn unlock_exclusive(&self) {
         debug_assert!(self.is_locked_exclusive());
 
-        self.lock.fetch_and(!EXCLUSIVE, Ordering::Release);
+        self.over_state(|state| state & !EXCLUSIVE);
     }
 
     #[inline]
     fn is_locked(&self) -> bool {
-        self.lock.load(Ordering::Relaxed) != 0
+        self.lock.get() != 0
     }
 
     #[inline]
     fn is_locked_exclusive(&self) -> bool {
-        self.lock.load(Ordering::Relaxed) & EXCLUSIVE == EXCLUSIVE
+        self.lock.get() & EXCLUSIVE == EXCLUSIVE
     }
 }
 
@@ -186,7 +196,7 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
 
     #[inline]
     fn try_lock_upgradable(&self) -> bool {
-        let value = self.lock.fetch_or(UPGRADABLE, Ordering::Acquire);
+        let value = self.over_state(|state| state | UPGRADABLE);
 
         let acquired = value & (UPGRADABLE | EXCLUSIVE) == 0;
 
@@ -203,7 +213,7 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
     unsafe fn unlock_upgradable(&self) {
         debug_assert!(self.is_locked_upgradable());
 
-        self.lock.fetch_and(!UPGRADABLE, Ordering::Release);
+        self.over_state(|state| state & !UPGRADABLE);
     }
 
     #[inline]
@@ -216,9 +226,11 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
 
     #[inline]
     unsafe fn try_upgrade(&self) -> bool {
-        self.lock
-            .compare_exchange(UPGRADABLE, EXCLUSIVE, Ordering::Acquire, Ordering::Relaxed)
-            .is_ok()
+        let ok = self.lock.get() == UPGRADABLE;
+        if ok {
+            self.lock.set(EXCLUSIVE);
+        }
+        ok
     }
 }
 
@@ -236,8 +248,7 @@ unsafe impl RawRwLockUpgradeDowngrade for RawOneShotRwLock {
     unsafe fn downgrade_to_upgradable(&self) {
         debug_assert!(self.is_locked_exclusive());
 
-        self.lock
-            .fetch_xor(UPGRADABLE | EXCLUSIVE, Ordering::Release);
+        self.over_state(|state| state ^ (UPGRADABLE | EXCLUSIVE));
     }
 }
 
