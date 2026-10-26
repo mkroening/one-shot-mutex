@@ -10,4 +10,4 @@ keywords = ["mutex", "single-thread", "deadlock"]
 categories = ["no-std::no-alloc"]
 
 [dependencies]
-lock_api = "0.4"
+lock_api = "0.5"
