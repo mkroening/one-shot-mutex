@@ -57,6 +57,7 @@ unsafe impl RawMutex for RawOneShotMutex {
     type Guard = GuardSend;
 
     #[inline]
+    #[track_caller]
     fn lock(&self) -> Self::Guard {
         self.try_lock()
             .expect("called `lock` on a `RawOneShotMutex` that is already locked")

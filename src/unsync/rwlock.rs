@@ -70,6 +70,7 @@ impl RawOneShotRwLock {
 
     /// Acquire a shared lock, returning the new lock value.
     #[inline]
+    #[track_caller]
     fn acquire_shared(&self) -> usize {
         let value = self.over_state(|state| state + SHARED);
 
@@ -97,6 +98,7 @@ unsafe impl RawRwLock for RawOneShotRwLock {
     type ExclusiveGuard = GuardSend;
 
     #[inline]
+    #[track_caller]
     fn lock_shared(&self) -> Self::SharedGuard {
         self.try_lock_shared().expect(
             "called `lock_shared` on a `RawOneShotRwLock` that is already locked exclusively",
@@ -126,6 +128,7 @@ unsafe impl RawRwLock for RawOneShotRwLock {
     }
 
     #[inline]
+    #[track_caller]
     fn lock_exclusive(&self) -> Self::ExclusiveGuard {
         self.try_lock_exclusive()
             .expect("called `lock_exclusive` on a `RawOneShotRwLock` that is already locked")
@@ -176,6 +179,7 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
     type UpgradableGuard = GuardSend;
 
     #[inline]
+    #[track_caller]
     fn lock_upgradable(&self) -> Self::UpgradableGuard {
         self.try_lock_upgradable().expect("called `lock_upgradable` on a `RawOneShotRwLock` that is already locked upgradably or exclusively")
     }
@@ -203,6 +207,7 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
     }
 
     #[inline]
+    #[track_caller]
     unsafe fn upgrade(&self, guard: Self::UpgradableGuard) -> Self::ExclusiveGuard {
         unsafe {
             self.try_upgrade(guard).unwrap_or_else(|_| {
