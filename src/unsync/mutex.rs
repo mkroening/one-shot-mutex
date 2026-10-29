@@ -54,24 +54,22 @@ unsafe impl RawMutex for RawOneShotMutex {
         lock: Cell::new(false),
     };
 
-    type GuardMarker = GuardSend;
+    type Guard = GuardSend;
 
     #[inline]
-    fn lock(&self) {
-        assert!(
-            self.try_lock(),
-            "called `lock` on a `RawOneShotMutex` that is already locked"
-        );
+    fn lock(&self) -> Self::Guard {
+        self.try_lock()
+            .expect("called `lock` on a `RawOneShotMutex` that is already locked")
     }
 
     #[inline]
-    fn try_lock(&self) -> bool {
+    fn try_lock(&self) -> Option<Self::Guard> {
         let was_locked = self.lock.replace(true);
-        !was_locked
+        (!was_locked).then(Self::Guard::new)
     }
 
     #[inline]
-    unsafe fn unlock(&self) {
+    unsafe fn unlock(&self, _guard: Self::Guard) {
         self.lock.set(false);
     }
 
@@ -83,12 +81,12 @@ unsafe impl RawMutex for RawOneShotMutex {
 
 unsafe impl RawMutexFair for RawOneShotMutex {
     #[inline]
-    unsafe fn unlock_fair(&self) {
-        unsafe { self.unlock() }
+    unsafe fn unlock_fair(&self, guard: Self::Guard) {
+        unsafe { self.unlock(guard) }
     }
 
     #[inline]
-    unsafe fn bump(&self) {}
+    unsafe fn bump(&self, _guard: &mut Self::Guard) {}
 }
 
 /// A [`lock_api::Mutex`] based on [`RawOneShotMutex`].

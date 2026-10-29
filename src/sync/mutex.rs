@@ -51,25 +51,24 @@ unsafe impl RawMutex for RawOneShotMutex {
         lock: AtomicBool::new(false),
     };
 
-    type GuardMarker = GuardSend;
+    type Guard = GuardSend;
 
     #[inline]
-    fn lock(&self) {
-        assert!(
-            self.try_lock(),
-            "called `lock` on a `RawOneShotMutex` that is already locked"
-        );
+    fn lock(&self) -> Self::Guard {
+        self.try_lock()
+            .expect("called `lock` on a `RawOneShotMutex` that is already locked")
     }
 
     #[inline]
-    fn try_lock(&self) -> bool {
+    fn try_lock(&self) -> Option<Self::Guard> {
         self.lock
             .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
             .is_ok()
+            .then(Self::Guard::new)
     }
 
     #[inline]
-    unsafe fn unlock(&self) {
+    unsafe fn unlock(&self, _guard: Self::Guard) {
         self.lock.store(false, Ordering::Release);
     }
 
@@ -81,12 +80,12 @@ unsafe impl RawMutex for RawOneShotMutex {
 
 unsafe impl RawMutexFair for RawOneShotMutex {
     #[inline]
-    unsafe fn unlock_fair(&self) {
-        unsafe { self.unlock() }
+    unsafe fn unlock_fair(&self, guard: Self::Guard) {
+        unsafe { self.unlock(guard) }
     }
 
     #[inline]
-    unsafe fn bump(&self) {}
+    unsafe fn bump(&self, _guard: &mut Self::Guard) {}
 }
 
 /// A [`lock_api::Mutex`] based on [`RawOneShotMutex`].

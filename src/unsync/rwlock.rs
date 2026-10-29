@@ -1,8 +1,7 @@
 use core::cell::Cell;
 
 use lock_api::{
-    GuardSend, RawRwLock, RawRwLockDowngrade, RawRwLockRecursive, RawRwLockUpgrade,
-    RawRwLockUpgradeDowngrade,
+    GuardSend, RawRwLock, RawRwLockDowngrade, RawRwLockUpgrade, RawRwLockUpgradeDowngrade,
 };
 
 /// A one-shot readers-writer lock that panics instead of (dead)locking on contention.
@@ -94,57 +93,55 @@ unsafe impl RawRwLock for RawOneShotRwLock {
     #[allow(clippy::declare_interior_mutable_const)]
     const INIT: Self = Self { lock: Cell::new(0) };
 
-    type GuardMarker = GuardSend;
+    type SharedGuard = GuardSend;
+    type ExclusiveGuard = GuardSend;
 
     #[inline]
-    fn lock_shared(&self) {
-        assert!(
-            self.try_lock_shared(),
-            "called `lock_shared` on a `RawOneShotRwLock` that is already locked exclusively"
-        );
+    fn lock_shared(&self) -> Self::SharedGuard {
+        self.try_lock_shared().expect(
+            "called `lock_shared` on a `RawOneShotRwLock` that is already locked exclusively",
+        )
     }
 
     #[inline]
-    fn try_lock_shared(&self) -> bool {
+    fn try_lock_shared(&self) -> Option<Self::SharedGuard> {
         let value = self.acquire_shared();
 
         let acquired = value & EXCLUSIVE != EXCLUSIVE;
 
         if !acquired {
             unsafe {
-                self.unlock_shared();
+                self.unlock_shared(Self::SharedGuard::new());
             }
         }
 
-        acquired
+        acquired.then(Self::SharedGuard::new)
     }
 
     #[inline]
-    unsafe fn unlock_shared(&self) {
+    unsafe fn unlock_shared(&self, _guard: Self::SharedGuard) {
         debug_assert!(self.is_locked_shared());
 
         self.over_state(|state| state - SHARED);
     }
 
     #[inline]
-    fn lock_exclusive(&self) {
-        assert!(
-            self.try_lock_exclusive(),
-            "called `lock_exclusive` on a `RawOneShotRwLock` that is already locked"
-        );
+    fn lock_exclusive(&self) -> Self::ExclusiveGuard {
+        self.try_lock_exclusive()
+            .expect("called `lock_exclusive` on a `RawOneShotRwLock` that is already locked")
     }
 
     #[inline]
-    fn try_lock_exclusive(&self) -> bool {
+    fn try_lock_exclusive(&self) -> Option<Self::ExclusiveGuard> {
         let ok = self.lock.get() == 0;
         if ok {
             self.lock.set(EXCLUSIVE);
         }
-        ok
+        ok.then(Self::ExclusiveGuard::new)
     }
 
     #[inline]
-    unsafe fn unlock_exclusive(&self) {
+    unsafe fn unlock_exclusive(&self, _guard: Self::ExclusiveGuard) {
         debug_assert!(self.is_locked_exclusive());
 
         self.over_state(|state| state & !EXCLUSIVE);
@@ -161,95 +158,96 @@ unsafe impl RawRwLock for RawOneShotRwLock {
     }
 }
 
-unsafe impl RawRwLockRecursive for RawOneShotRwLock {
-    #[inline]
-    fn lock_shared_recursive(&self) {
-        self.lock_shared();
-    }
-
-    #[inline]
-    fn try_lock_shared_recursive(&self) -> bool {
-        self.try_lock_shared()
-    }
-}
-
 unsafe impl RawRwLockDowngrade for RawOneShotRwLock {
     #[inline]
-    unsafe fn downgrade(&self) {
+    unsafe fn downgrade(&self, guard: Self::ExclusiveGuard) -> Self::SharedGuard {
         // Reserve the shared guard for ourselves
         self.acquire_shared();
 
         unsafe {
-            self.unlock_exclusive();
+            self.unlock_exclusive(guard);
         }
+
+        Self::SharedGuard::new()
     }
 }
 
 unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
+    type UpgradableGuard = GuardSend;
+
     #[inline]
-    fn lock_upgradable(&self) {
-        assert!(
-            self.try_lock_upgradable(),
-            "called `lock_upgradable` on a `RawOneShotRwLock` that is already locked upgradably or exclusively"
-        );
+    fn lock_upgradable(&self) -> Self::UpgradableGuard {
+        self.try_lock_upgradable().expect("called `lock_upgradable` on a `RawOneShotRwLock` that is already locked upgradably or exclusively")
     }
 
     #[inline]
-    fn try_lock_upgradable(&self) -> bool {
+    fn try_lock_upgradable(&self) -> Option<Self::UpgradableGuard> {
         let value = self.over_state(|state| state | UPGRADABLE);
 
         let acquired = value & (UPGRADABLE | EXCLUSIVE) == 0;
 
         if !acquired && value & UPGRADABLE == 0 {
             unsafe {
-                self.unlock_upgradable();
+                self.unlock_upgradable(Self::UpgradableGuard::new());
             }
         }
 
-        acquired
+        acquired.then_some(Self::UpgradableGuard::new())
     }
 
     #[inline]
-    unsafe fn unlock_upgradable(&self) {
+    unsafe fn unlock_upgradable(&self, _guard: Self::UpgradableGuard) {
         debug_assert!(self.is_locked_upgradable());
 
         self.over_state(|state| state & !UPGRADABLE);
     }
 
     #[inline]
-    unsafe fn upgrade(&self) {
-        let upgraded = unsafe { self.try_upgrade() };
-        assert!(
-            upgraded,
-            "called `upgrade` on a `RawOneShotRwLock` that is also locked shared by others"
-        );
+    unsafe fn upgrade(&self, guard: Self::UpgradableGuard) -> Self::ExclusiveGuard {
+        unsafe {
+            self.try_upgrade(guard).unwrap_or_else(|_| {
+                panic!(
+                    "called `upgrade` on a `RawOneShotRwLock` that is also locked shared by others"
+                )
+            })
+        }
     }
 
     #[inline]
-    unsafe fn try_upgrade(&self) -> bool {
+    unsafe fn try_upgrade(
+        &self,
+        guard: Self::UpgradableGuard,
+    ) -> Result<Self::ExclusiveGuard, Self::UpgradableGuard> {
         let ok = self.lock.get() == UPGRADABLE;
         if ok {
             self.lock.set(EXCLUSIVE);
         }
-        ok
+        ok.then(Self::ExclusiveGuard::new).ok_or(guard)
     }
 }
 
 unsafe impl RawRwLockUpgradeDowngrade for RawOneShotRwLock {
     #[inline]
-    unsafe fn downgrade_upgradable(&self) {
+    unsafe fn downgrade_upgradable(&self, guard: Self::UpgradableGuard) -> Self::SharedGuard {
         self.acquire_shared();
 
         unsafe {
-            self.unlock_upgradable();
+            self.unlock_upgradable(guard);
         }
+
+        Self::SharedGuard::new()
     }
 
     #[inline]
-    unsafe fn downgrade_to_upgradable(&self) {
+    unsafe fn downgrade_to_upgradable(
+        &self,
+        _guard: Self::ExclusiveGuard,
+    ) -> Self::UpgradableGuard {
         debug_assert!(self.is_locked_exclusive());
 
         self.over_state(|state| state ^ (UPGRADABLE | EXCLUSIVE));
+
+        Self::UpgradableGuard::new()
     }
 }
 
