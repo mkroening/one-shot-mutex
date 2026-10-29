@@ -177,17 +177,12 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
 
     #[inline]
     fn try_lock_upgradable(&self) -> Option<Self::UpgradableGuard> {
-        let value = self.lock.fetch_or(UPGRADABLE, Ordering::Acquire);
-
-        let acquired = value & (UPGRADABLE | EXCLUSIVE) == 0;
-
-        if !acquired && value & UPGRADABLE == 0 {
-            unsafe {
-                self.unlock_upgradable(Self::UpgradableGuard::new());
-            }
-        }
-
-        acquired.then(Self::UpgradableGuard::new)
+        self.lock
+            .try_update(Ordering::Acquire, Ordering::Relaxed, |state| {
+                (state & (EXCLUSIVE | UPGRADABLE) == 0).then_some(state | UPGRADABLE)
+            })
+            .is_ok()
+            .then(Self::UpgradableGuard::new)
     }
 
     #[inline]
