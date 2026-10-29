@@ -1,7 +1,6 @@
 [package]
 name = "one-shot-mutex"
 version = "0.2.1"
-authors = ["Martin Kröning <mkroening@posteo.net>"]
 edition = "2021"
 description = "One-shot locks that panic instead of (dead)locking on contention."
 repository = "https://github.com/mkroening/one-shot-mutex"
