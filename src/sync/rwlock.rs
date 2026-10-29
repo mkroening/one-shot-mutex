@@ -200,12 +200,16 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
     #[inline]
     #[track_caller]
     unsafe fn upgrade(&self, guard: Self::UpgradableGuard) -> Self::ExclusiveGuard {
-        unsafe {
-            self.try_upgrade(guard).unwrap_or_else(|_| {
+        match unsafe { self.try_upgrade(guard) } {
+            Ok(guard) => guard,
+            Err(guard) => {
+                unsafe {
+                    self.unlock_upgradable(guard);
+                }
                 panic!(
                     "called `upgrade` on a `RawOneShotRwLock` that is also locked shared by others"
                 )
-            })
+            }
         }
     }
 
