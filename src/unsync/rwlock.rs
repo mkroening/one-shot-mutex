@@ -218,8 +218,9 @@ unsafe impl RawRwLockUpgrade for RawOneShotRwLock {
 
     #[inline]
     unsafe fn upgrade(&self) {
+        let upgraded = unsafe { self.try_upgrade() };
         assert!(
-            self.try_upgrade(),
+            upgraded,
             "called `upgrade` on a `RawOneShotRwLock` that is also locked shared by others"
         );
     }
